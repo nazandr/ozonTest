@@ -5,6 +5,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/nazandr/ozonTest/internal/app/models"
 	"github.com/nazandr/ozonTest/internal/app/store"
 )
 
@@ -12,6 +13,10 @@ type Server struct {
 	Config *Config
 	Echo   *echo.Echo
 	Store  *store.Store
+}
+
+type Resp struct {
+	Url string `json:"url"`
 }
 
 func New(config *Config) *Server {
@@ -50,23 +55,45 @@ func (s *Server) configureRouter() {
 }
 
 func (s *Server) handleShort(c echo.Context) error {
-	u := new(struct {
-		Url string `json:"url"`
-	})
+	u := new(Resp)
 	if err := c.Bind(u); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
+	url := models.NewURL()
+	url.Long = u.Url
+	if err := url.Validation(); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
 
-	return c.JSON(http.StatusOK, u)
+	if l, _ := s.Store.Url().FindByLong(u.Url); l != nil {
+		r := Resp{
+			Url: l.Short,
+		}
+		return c.JSON(http.StatusOK, r)
+	}
+
+	if err := s.Store.Url().Create(url); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	url.Shortener()
+	s.Store.Url().UpdateShort(url)
+
+	return c.JSON(http.StatusOK, Resp{Url: url.Short})
 }
 
 func (s *Server) handleLong(c echo.Context) error {
-	u := new(struct {
-		Url string `json:"url"`
-	})
+	u := new(Resp)
 	if err := c.Bind(u); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, u)
+	url, err := s.Store.Url().FindByShort(u.Url)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	r := Resp{
+		Url: url.Long,
+	}
+	return c.JSON(http.StatusOK, r)
 }
