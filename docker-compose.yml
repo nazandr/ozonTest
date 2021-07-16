@@ -1,0 +1,54 @@
+version: '3.4'
+
+services:
+  postgres:
+    image: postgres:10.5
+    networks:
+      - postgres_network
+    volumes: 
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: short_url
+      POSTGRES_USER: postgres
+    ports:
+        - "5432"
+    healthcheck:
+      test: pg_isready -U postgres -d short_url
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  migrate:
+      image: migrate/migrate
+      networks:
+          - postgres_network
+      volumes:
+          - ./migrations:/migrations
+      depends_on: 
+        postgres:
+          condition: service_healthy
+      command: ["-path", "/migrations", "-database",  "postgres://postgres@postgres/short_url?sslmode=disable", "up"]
+      links: 
+          - postgres
+
+
+  ozontest:
+    image: ozontest
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - 8080:8080
+    depends_on:
+      - migrate
+      - postgres
+    networks:
+      - postgres_network
+    restart: always
+
+volumes:
+  postgres-data:
+    name: postgres-data
+networks:
+  postgres_network:
+    name: postgres_network
