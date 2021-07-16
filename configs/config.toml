@@ -1,5 +1,4 @@
 ip_addr = ":8080"
-log_lvl = "debug"
 
 [store]
 database_url = "host=postgres user=postgres dbname=short_url sslmode=disable"
